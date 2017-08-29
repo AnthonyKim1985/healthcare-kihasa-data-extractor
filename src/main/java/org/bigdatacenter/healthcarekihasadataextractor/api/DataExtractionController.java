@@ -27,17 +27,22 @@ public class DataExtractionController {
     private static final String currentThreadName = Thread.currentThread().getName();
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    private final RabbitTemplate rabbitTemplate;
+    private static final int KHPHH = 8;
+    private static final int KHPIND = 10;
 
-    private final ExtractionRequestResolver extractionRequestResolver;
+    private final RabbitTemplate rabbitTemplate;
 
     private final DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller;
 
+    private final ExtractionRequestResolver extractionRequestResolver;
+
     @Autowired
-    public DataExtractionController(ExtractionRequestResolver extractionRequestResolver, RabbitTemplate rabbitTemplate, DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller) {
-        this.extractionRequestResolver = extractionRequestResolver;
+    public DataExtractionController(RabbitTemplate rabbitTemplate,
+                                    DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller,
+                                    ExtractionRequestResolver extractionRequestResolver) {
         this.rabbitTemplate = rabbitTemplate;
         this.dataIntegrationPlatformAPICaller = dataIntegrationPlatformAPICaller;
+        this.extractionRequestResolver = extractionRequestResolver;
     }
 
     @ResponseBody
@@ -46,10 +51,12 @@ public class DataExtractionController {
     public ExtractionResponse dataExtraction(@RequestBody ExtractionParameter extractionParameter, HttpServletResponse httpServletResponse) {
         final ExtractionRequest extractionRequest;
         final ExtractionResponse extractionResponse;
-        final Integer dataSetUID  = extractionParameter.getRequestInfo().getDataSetUID();
+        final Integer dataSetUID = extractionParameter.getRequestInfo().getDataSetUID();
+
         try {
             logger.info(String.format("%s - extractionParameter: %s", currentThreadName, extractionParameter));
             extractionRequest = extractionRequestResolver.buildExtractionRequest(extractionParameter);
+            logger.info(String.format("%s - extractionRequest: %s", currentThreadName, extractionRequest));
 
             synchronized (this) {
                 rabbitTemplate.convertAndSend(RabbitMQConfig.EXTRACTION_REQUEST_QUEUE, extractionRequest);
@@ -66,4 +73,25 @@ public class DataExtractionController {
 
         return extractionResponse;
     }
+
+//    private ExtractionRequest resolveExtractionRequest(ExtractionParameter extractionParameter) {
+//        final Integer dataSetID = extractionParameter.getRequestInfo().getDatasetID();
+//        final ExtractionRequest extractionRequest;
+//
+//        try {
+//            switch (dataSetID) {
+//                case KHPHH:
+//                    extractionRequest = extractionRequestResolverForKhpHh.buildExtractionRequest(extractionParameter);
+//                    break;
+//                case KHPIND:
+//                    extractionRequest = extractionRequestResolverForKhpHh.buildExtractionRequest(extractionParameter);
+//                    break;
+//                default:
+//                    throw new RuntimeException(String.format("Invalid data set id: %d", dataSetID));
+//            }
+//            return extractionRequest;
+//        } catch (Exception e) {
+//            throw new RuntimeException(e.getMessage());
+//        }
+//    }
 }
