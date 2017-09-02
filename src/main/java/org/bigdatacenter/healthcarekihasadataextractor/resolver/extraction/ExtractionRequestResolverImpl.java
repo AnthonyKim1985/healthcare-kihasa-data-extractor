@@ -172,7 +172,7 @@ public class ExtractionRequestResolverImpl implements ExtractionRequestResolver 
 
                 JoinParameter sourceJoinParameter = new JoinParameter(databaseName, tableName, header, joinCondition);
 
-                final String joinQuery = joinClauseBuilder.buildClause(sourceJoinParameter, targetJoinParameter);
+                final String joinQuery = joinClauseBuilder.buildClause(sourceJoinParameter, targetJoinParameter, Boolean.FALSE);
                 final String joinDbName = String.format("%s_join_%s_integrated", databaseName, joinCondition);
                 final String joinTableName = String.format("%s_%s", databaseName, CommonUtil.getHashedString(joinQuery));
                 final String dbAndHashedTableName = String.format("%s.%s", joinDbName, joinTableName);

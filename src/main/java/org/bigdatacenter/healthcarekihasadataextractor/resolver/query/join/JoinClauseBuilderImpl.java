@@ -53,9 +53,15 @@ public class JoinClauseBuilderImpl implements JoinClauseBuilder {
     }
 
     @Override
-    public String buildClause(JoinParameter sourceJoinParameter, JoinParameter targetJoinParameter) {
+    public String buildClause(JoinParameter sourceJoinParameter, JoinParameter targetJoinParameter, Boolean isKogesDataSet) {
         if (sourceJoinParameter == null || targetJoinParameter == null)
             throw new NullPointerException("Either sourceJoinParameter or targetJoinParameter is null.");
+
+        if (isKogesDataSet)
+            return String.format("SELECT DISTINCT A.*, B.snp FROM %s.%s A INNER JOIN %s.%s B ON (A.%s = B.%s)",
+                    sourceJoinParameter.getDatabaseName(), sourceJoinParameter.getTableName(),
+                    targetJoinParameter.getDatabaseName(), targetJoinParameter.getTableName(),
+                    sourceJoinParameter.getJoinKey(), targetJoinParameter.getJoinKey());
 
         return String.format("SELECT DISTINCT A.* FROM %s.%s A INNER JOIN %s.%s B ON (A.%s = B.%s)",
                 sourceJoinParameter.getDatabaseName(), sourceJoinParameter.getTableName(),
