@@ -27,8 +27,8 @@ public class DataExtractionController {
     private static final String currentThreadName = Thread.currentThread().getName();
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    private static final int KHPHH = 8;
-    private static final int KHPIND = 10;
+//    private static final int KHPHH = 8;
+//    private static final int KHPIND = 10;
 
     private final RabbitTemplate rabbitTemplate;
 
