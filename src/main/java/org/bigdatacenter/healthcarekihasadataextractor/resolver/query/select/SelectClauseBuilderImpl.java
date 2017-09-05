@@ -60,7 +60,7 @@ public class SelectClauseBuilderImpl implements SelectClauseBuilder {
             String snpRsElement = snpRsArray[i];
             String affy5MapNumberElement = affy5MapNumberArray[i];
 
-            selectBuilder.append(String.format(" substring(snp, 2 * %s - 1, 1) %s_1, substring(snp, 2 * %s, 1) %s_2",
+            selectBuilder.append(String.format("substring(snp, 2 * %s - 1, 1) %s_1,substring(snp, 2 * %s, 1) %s_2",
                     affy5MapNumberElement, snpRsElement, affy5MapNumberElement, snpRsElement));
 
             if (i < affy5MapNumberArray.length - 1)
