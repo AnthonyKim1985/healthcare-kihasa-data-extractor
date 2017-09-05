@@ -118,10 +118,11 @@ public class DataIntegrationPlatformAPICallerImpl implements DataIntegrationPlat
     }
 
     @Override
-    public String callReadProjectionNames(Integer dataSetUID, String tableName) {
+    public String callReadProjectionNames(Integer dataSetUID, String tableName, Integer tableYear) {
         final MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
         parameters.add("dataSetUID", String.valueOf(dataSetUID));
         parameters.add("tableName", tableName);
+        parameters.add("tableYear", String.valueOf(tableYear));
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(parameters, headers);
 
