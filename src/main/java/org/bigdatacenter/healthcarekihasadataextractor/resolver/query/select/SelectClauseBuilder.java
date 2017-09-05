@@ -5,5 +5,5 @@ public interface SelectClauseBuilder {
 
     String buildClause(String dbName, String tableName, String projections, Boolean enableDistinct);
 
-    String buildClause(String dbName, String tableName, String projections, String snpRs, Integer affy5MapNumber);
+    String buildClause(String dbName, String tableName, String projections, String snpRs, String affy5MapNumber);
 }

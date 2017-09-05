@@ -45,7 +45,7 @@ public class TrRequestInfo implements Serializable {
     private String joinCondition;
     private Integer joinConditionYear;
     private String snpRs;
-    private Integer affy5MapNumber;
+    private String affy5MapNumber;
     private Integer groupUID;
     private Integer orgID;
 }
