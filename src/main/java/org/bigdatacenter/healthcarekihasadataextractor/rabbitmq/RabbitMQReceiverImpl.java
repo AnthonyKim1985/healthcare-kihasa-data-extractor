@@ -1,7 +1,7 @@
 package org.bigdatacenter.healthcarekihasadataextractor.rabbitmq;
 
 import org.bigdatacenter.healthcarekihasadataextractor.api.caller.DataIntegrationPlatformAPICaller;
-import org.bigdatacenter.healthcarekihasadataextractor.config.RabbitMQConfig;
+import org.bigdatacenter.healthcarekihasadataextractor.api.caller.statistic.StatisticAPICaller;
 import org.bigdatacenter.healthcarekihasadataextractor.domain.extraction.request.ExtractionRequest;
 import org.bigdatacenter.healthcarekihasadataextractor.domain.extraction.request.task.QueryTask;
 import org.bigdatacenter.healthcarekihasadataextractor.domain.extraction.request.task.creation.TableCreationTask;
@@ -32,15 +32,18 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
 
     private final DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller;
 
+    private final StatisticAPICaller statisticAPICaller;
+
     @Value("${shellscript.path.home}")
     private String homePath;
 
     @Autowired
-    public RabbitMQReceiverImpl(ShellScriptResolver shellScriptResolver, RabbitAdmin rabbitAdmin, RawDataDBService rawDataDBService, DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller) {
+    public RabbitMQReceiverImpl(ShellScriptResolver shellScriptResolver, RabbitAdmin rabbitAdmin, RawDataDBService rawDataDBService, DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller, StatisticAPICaller statisticAPICaller) {
         this.shellScriptResolver = shellScriptResolver;
         this.rabbitAdmin = rabbitAdmin;
         this.rawDataDBService = rawDataDBService;
         this.dataIntegrationPlatformAPICaller = dataIntegrationPlatformAPICaller;
+        this.statisticAPICaller = statisticAPICaller;
     }
 
     @Override
@@ -124,6 +127,7 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
         try {
             final String databaseName = extractionRequest.getDatabaseName();
             final List<QueryTask> queryTaskList = extractionRequest.getQueryTaskList();
+            final TrRequestInfo requestInfo = extractionRequest.getRequestInfo();
             final int queryTaskListSize = queryTaskList.size();
 
             for (int i = 0; i < queryTaskListSize; i++) {
@@ -141,6 +145,15 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
 
                 if (dataExtractionTask != null) {
                     logger.info(String.format("%s - Start data extraction at Hive Query: %s", currentThreadName, dataExtractionTask.getQuery()));
+
+                    //
+                    // TODO: Call REST API For Statistic
+                    //
+                    if (tableCreationTask != null) {
+                        String [] dbAndTableName = tableCreationTask.getDbAndHashedTableName().split("[.]");
+                        statisticAPICaller.callCreateStatistic(requestInfo.getDataSetUID(), dbAndTableName[0], dbAndTableName[1]);
+                    }
+
                     rawDataDBService.extractData(dataExtractionTask);
 
                     //
