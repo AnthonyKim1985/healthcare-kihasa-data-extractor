@@ -70,9 +70,10 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
                 try {
                     dataIntegrationPlatformAPICaller.callUpdateProcessState(dataSetUID, DataIntegrationPlatformAPICaller.PROCESS_STATE_CODE_REJECTED);
                     logger.error(String.format("%s - Exception occurs in RabbitMQReceiver : %s", currentThreadName, e1.getMessage()));
+                    logger.error(String.format("%s - Bad Extraction Request : %s", currentThreadName, extractionRequest));
 
-                    rabbitAdmin.purgeQueue(RabbitMQConfig.EXTRACTION_REQUEST_QUEUE, true);
-                    logger.error(String.format("%s - The extraction request has been purged in queue. (%s)", currentThreadName, extractionRequest));
+//                    rabbitAdmin.purgeQueue(RabbitMQConfig.EXTRACTION_REQUEST_QUEUE, true);
+//                    logger.error(String.format("%s - The extraction request has been purged in queue. (%s)", currentThreadName, extractionRequest));
                     e1.printStackTrace();
                 } catch (Exception e2) {
                     e2.printStackTrace();
@@ -86,8 +87,10 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
                     if (dataSetUID != null)
                         dataIntegrationPlatformAPICaller.callUpdateProcessState(dataSetUID, DataIntegrationPlatformAPICaller.PROCESS_STATE_CODE_REJECTED);
                 }
-                rabbitAdmin.purgeQueue(RabbitMQConfig.EXTRACTION_REQUEST_QUEUE, true);
-                logger.error(String.format("%s - The extraction request has been purged in queue. (%s)", currentThreadName, extractionRequest));
+                logger.error(String.format("%s - Bad Extraction Request : %s", currentThreadName, extractionRequest));
+
+//                rabbitAdmin.purgeQueue(RabbitMQConfig.EXTRACTION_REQUEST_QUEUE, true);
+//                logger.error(String.format("%s - The extraction request has been purged in queue. (%s)", currentThreadName, extractionRequest));
             } catch (Exception e) {
                 e.printStackTrace();
             }
