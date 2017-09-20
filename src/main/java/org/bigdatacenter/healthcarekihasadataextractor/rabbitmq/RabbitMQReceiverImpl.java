@@ -107,7 +107,7 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
         final List<QueryTask> queryTaskList = extractionRequest.getQueryTaskList();
         final TrRequestInfo requestInfo = extractionRequest.getRequestInfo();
 
-        if (databaseName ==  null) {
+        if (databaseName == null) {
             logger.error(String.format("%s - Error occurs at RabbitMQReceiver: databaseName is null.", currentThreadName));
             isValid = Boolean.FALSE;
         } else if (requestInfo == null) {
@@ -149,9 +149,13 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
                     //
                     // TODO: Call REST API For Statistic
                     //
-                    if (tableCreationTask != null) {
-                        String [] dbAndTableName = tableCreationTask.getDbAndHashedTableName().split("[.]");
-                        statisticAPICaller.callCreateStatistic(requestInfo.getDataSetUID(), dbAndTableName[0], dbAndTableName[1]);
+                    try {
+                        if (tableCreationTask != null) {
+                            String[] dbAndTableName = tableCreationTask.getDbAndHashedTableName().split("[.]");
+                            statisticAPICaller.callCreateStatistic(requestInfo.getDataSetUID(), dbAndTableName[0], dbAndTableName[1]);
+                        }
+                    } catch (Exception e) {
+                        logger.warn(String.format("%s - Exception occurs at Statistic API Caller: %s", currentThreadName, e.getMessage()));
                     }
 
                     rawDataDBService.extractData(dataExtractionTask);
