@@ -52,6 +52,9 @@ public class WhereClauseBuilderImpl implements WhereClauseBuilder {
             case ">=":
                 comparisonClauseBuilder.append(String.format(" %s >= %s", columnName, columnValue));
                 break;
+            case "<>":
+                comparisonClauseBuilder.append(String.format(" %s <> %s", columnName, columnValue));
+                break;
             default:
                 throw new RuntimeException(String.format("Invalid comparison operator: %s", columnOperator));
         }
