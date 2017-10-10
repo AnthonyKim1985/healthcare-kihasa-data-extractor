@@ -149,14 +149,14 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
                     //
                     // TODO: Call REST API For Statistic
                     //
-                    try {
-                        if (tableCreationTask != null) {
-                            String[] dbAndTableName = tableCreationTask.getDbAndHashedTableName().split("[.]");
-                            statisticAPICaller.callCreateStatistic(requestInfo.getDataSetUID(), dbAndTableName[0], dbAndTableName[1]);
-                        }
-                    } catch (Exception e) {
-                        logger.warn(String.format("%s - Exception occurs at Statistic API Caller: %s", currentThreadName, e.getMessage()));
-                    }
+//                    try {
+//                        if (tableCreationTask != null) {
+//                            String[] dbAndTableName = tableCreationTask.getDbAndHashedTableName().split("[.]");
+//                            statisticAPICaller.callCreateStatistic(requestInfo.getDataSetUID(), dbAndTableName[0], dbAndTableName[1]);
+//                        }
+//                    } catch (Exception e) {
+//                        logger.warn(String.format("%s - Exception occurs at Statistic API Caller: %s", currentThreadName, e.getMessage()));
+//                    }
 
                     rawDataDBService.extractData(dataExtractionTask);
 
