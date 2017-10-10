@@ -48,4 +48,5 @@ public class TrRequestInfo implements Serializable {
     private String affy5MapNumber;
     private Integer groupUID;
     private Integer orgID;
+    private Integer statisticState;
 }
