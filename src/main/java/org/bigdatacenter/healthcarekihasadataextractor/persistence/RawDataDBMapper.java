@@ -11,6 +11,6 @@ public interface RawDataDBMapper {
     @Select("INSERT OVERWRITE DIRECTORY #{dataExtractionTask.hdfsLocation} ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' ${dataExtractionTask.query}")
     void extractData(@Param("dataExtractionTask") DataExtractionTask dataExtractionTask);
 
-    @Select("CREATE TABLE IF NOT EXISTS ${tableCreationTask.dbAndHashedTableName} AS ${tableCreationTask.query}")
+    @Select("CREATE TABLE IF NOT EXISTS ${tableCreationTask.dbAndHashedTableName} STORED AS ORC AS ${tableCreationTask.query}")
     void createTable(@Param("tableCreationTask") TableCreationTask tableCreationTask);
 }
