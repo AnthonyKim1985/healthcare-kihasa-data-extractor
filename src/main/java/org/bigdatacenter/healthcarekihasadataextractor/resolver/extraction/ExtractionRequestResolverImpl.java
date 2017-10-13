@@ -77,6 +77,7 @@ public class ExtractionRequestResolverImpl implements ExtractionRequestResolver 
             //
             // TODO: 1. 추출 연산을 위한 임시 테이블들을 생성한다.
             //
+            final Map<Integer/*Year*/, List<ParameterValue>> parameterValueListMapForCd1 = new HashMap<>();
             for (Integer year : yearParameterMap.keySet()) {
                 Map<ParameterKey, List<ParameterValue>> parameterMap = yearParameterMap.get(year);
                 Set<ParameterKey> joinTargetKeySet = yearJoinKeyMap.get(year);
@@ -97,15 +98,33 @@ public class ExtractionRequestResolverImpl implements ExtractionRequestResolver 
                 //
                 // TODO: 1.3. 임시 테이블 생성 쿼리를 생성한다. (유니크 컬럼을 갖고 있는 테이블만 대상)
                 //
-                List<JoinParameter> joinParameterList = new ArrayList<>();
+                final List<JoinParameter> joinParameterList = new ArrayList<>();
                 for (ParameterKey parameterKey : parameterMap.keySet()) {
                     final String tableName = parameterKey.getTableName();
                     final String header = parameterKey.getHeader();
+                    final List<ParameterValue> parameterValueList = parameterMap.get(parameterKey);
 
                     final String selectClause = selectClauseBuilder.buildClause(databaseName, tableName, header, Boolean.TRUE);
-                    final String whereClause = whereClauseBuilder.buildClause(parameterMap.get(parameterKey));
+                    final String whereClause = whereClauseBuilder.buildClause(parameterValueList);
                     final String query = String.format("%s %s", selectClause, whereClause);
                     logger.info(String.format("%s - query: %s", currentThreadName, query));
+
+                    if (tableName.startsWith("khpind_tcd_")) {
+                        for (ParameterValue parameterValue : parameterValueList) {
+                            final String columnName = parameterValue.getColumnName();
+                            if (columnName.equals("cd1") || columnName.equals("cd1_1")) {
+                                List<ParameterValue> parameterValueListForCd1 = parameterValueListMapForCd1.get(year);
+
+                                if (parameterValueListForCd1 == null) {
+                                    parameterValueListForCd1 = new ArrayList<>();
+                                    parameterValueListForCd1.add(parameterValue);
+                                    parameterValueListMapForCd1.put(year, parameterValueListForCd1);
+                                } else {
+                                    parameterValueListForCd1.add(parameterValue);
+                                }
+                            }
+                        }
+                    }
 
                     final String extrDbName = String.format("%s_extracted", databaseName);
                     final String extrTableName = String.format("%s_%s", databaseName, CommonUtil.getHashedString(query));
@@ -143,7 +162,10 @@ public class ExtractionRequestResolverImpl implements ExtractionRequestResolver 
                 for (Integer dataSetYear : joinParameterMapForExtraction.keySet()) {
                     final JoinParameter targetJoinParameter = joinParameterMapForExtraction.get(dataSetYear);
                     final Set<AdjacentTableInfo> adjacentTableInfoSet = yearAdjacentTableInfoMap.get(dataSetYear);
-                    queryTaskList.addAll(getJoinQueryTasks(adjacentTableInfoSet, targetJoinParameter, databaseName, joinCondition, requestInfo.getDataSetUID()));
+                    final List<ParameterValue> parameterValueListForCd1 = parameterValueListMapForCd1.get(dataSetYear);
+                    final String whereClause = whereClauseBuilder.buildClause(parameterValueListForCd1);
+
+                    queryTaskList.addAll(getJoinQueryTasks(adjacentTableInfoSet, targetJoinParameter, databaseName, joinCondition, whereClause, requestInfo.getDataSetUID()));
                 }
             }
             /* 기준 연도가 주어졌을 때 (추적) */
@@ -151,7 +173,10 @@ public class ExtractionRequestResolverImpl implements ExtractionRequestResolver 
                 final JoinParameter targetJoinParameter = joinParameterMapForExtraction.get(joinConditionYear);
                 for (Integer sourceDataSetYear : yearAdjacentTableInfoMap.keySet()) {
                     final Set<AdjacentTableInfo> adjacentTableInfoSet = yearAdjacentTableInfoMap.get(sourceDataSetYear);
-                    queryTaskList.addAll(getJoinQueryTasks(adjacentTableInfoSet, targetJoinParameter, databaseName, joinCondition, dataSetUID));
+                    final List<ParameterValue> parameterValueListForCd1 = parameterValueListMapForCd1.get(sourceDataSetYear);
+                    final String whereClause = whereClauseBuilder.buildClause(parameterValueListForCd1);
+
+                    queryTaskList.addAll(getJoinQueryTasks(adjacentTableInfoSet, targetJoinParameter, databaseName, joinCondition, whereClause, dataSetUID));
                 }
             }
 
@@ -162,7 +187,7 @@ public class ExtractionRequestResolverImpl implements ExtractionRequestResolver 
         }
     }
 
-    private List<QueryTask> getJoinQueryTasks(Set<AdjacentTableInfo> adjacentTableInfoSet, JoinParameter targetJoinParameter, String databaseName, String joinCondition, Integer dataSetUID) {
+    private List<QueryTask> getJoinQueryTasks(Set<AdjacentTableInfo> adjacentTableInfoSet, JoinParameter targetJoinParameter, String databaseName, String joinCondition, String whereClause, Integer dataSetUID) {
         List<QueryTask> queryTaskList = new ArrayList<>();
 
         try {
@@ -172,7 +197,12 @@ public class ExtractionRequestResolverImpl implements ExtractionRequestResolver 
 
                 JoinParameter sourceJoinParameter = new JoinParameter(databaseName, tableName, header, joinCondition);
 
-                final String joinQuery = joinClauseBuilder.buildClause(sourceJoinParameter, targetJoinParameter, Boolean.FALSE);
+                final String joinQuery;
+                if (tableName.startsWith("khpind_tcd_"))
+                    joinQuery = String.format("%s %s", joinClauseBuilder.buildClause(sourceJoinParameter, targetJoinParameter, Boolean.FALSE), whereClause);
+                else
+                    joinQuery = joinClauseBuilder.buildClause(sourceJoinParameter, targetJoinParameter, Boolean.FALSE);
+
                 final String joinDbName = String.format("%s_join_%s_integrated", databaseName, joinCondition);
                 final String joinTableName = String.format("%s_%s", databaseName, CommonUtil.getHashedString(joinQuery));
                 final String dbAndHashedTableName = String.format("%s.%s", joinDbName, joinTableName);
