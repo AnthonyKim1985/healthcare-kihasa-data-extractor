@@ -15,28 +15,28 @@ public class ShellScriptResolverImpl implements ShellScriptResolver {
     private static final Logger logger = LoggerFactory.getLogger(ShellScriptResolverImpl.class);
 
     @Override
-    public void runReducePartsMerger(String hdfsLocation, String header, String homePath, String dataFileName, String dataSetName) {
-        fork(CommandBuilder.buildReducePartsMerger(hdfsLocation, header, homePath, dataFileName, dataSetName));
+    public void runReducePartsMerger(Integer dataSetUID, String hdfsLocation, String header, String homePath, String dataFileName, String dataSetName) {
+        fork(dataSetUID, CommandBuilder.buildReducePartsMerger(hdfsLocation, header, homePath, dataFileName, dataSetName));
     }
 
     @Override
-    public void runArchiveExtractedDataSet(String archiveFileName, String ftpLocation, String homePath, String dataSetName) {
-        fork(CommandBuilder.buildArchiveExtractedDataSet(archiveFileName, ftpLocation, homePath, dataSetName));
+    public void runArchiveExtractedDataSet(Integer dataSetUID, String archiveFileName, String ftpLocation, String homePath, String dataSetName) {
+        fork(dataSetUID, CommandBuilder.buildArchiveExtractedDataSet(archiveFileName, ftpLocation, homePath, dataSetName));
     }
 
-    private void fork(String target) {
+    private void fork(Integer dataSetUID, String target) {
         try {
             Process process = Runtime.getRuntime().exec(target);
 
-            final Thread stdinStreamResolver = new Thread(new InputStreamResolver("input_stream", process.getInputStream()));
+            final Thread stdinStreamResolver = new Thread(new InputStreamResolver(dataSetUID, "input_stream", process.getInputStream()));
             stdinStreamResolver.start();
 
-            final Thread stderrStreamResolver = new Thread(new InputStreamResolver("error_stream", process.getErrorStream()));
+            final Thread stderrStreamResolver = new Thread(new InputStreamResolver(dataSetUID, "error_stream", process.getErrorStream()));
             stderrStreamResolver.start();
 
             process.waitFor();
         } catch (IOException | InterruptedException e) {
-            logger.warn(String.format("%s - Forked process occurs an exception: %s", Thread.currentThread().getName(), e.getMessage()));
+            logger.warn(String.format("(dataSetUID=%d / threadName=%s) - Forked process occurs an exception: %s", dataSetUID, Thread.currentThread().getName(), e.getMessage()));
         }
     }
 
@@ -53,6 +53,7 @@ public class ShellScriptResolverImpl implements ShellScriptResolver {
     @Data
     @AllArgsConstructor
     private final class InputStreamResolver implements Runnable, Serializable {
+        private final Integer dataSetUID;
         private final String streamName;
         private final InputStream inputStream;
 
@@ -69,7 +70,7 @@ public class ShellScriptResolverImpl implements ShellScriptResolver {
                     fileWriter.flush();
                 }
             } catch (IOException e) {
-                logger.warn(String.format("%s - Forked process occurs an exception: %s", Thread.currentThread().getName(), e.getMessage()));
+                logger.warn(String.format("(dataSetUID=%d / threadName=%s) - Forked process occurs an exception: %s", dataSetUID, Thread.currentThread().getName(), e.getMessage()));
             }
         }
     }

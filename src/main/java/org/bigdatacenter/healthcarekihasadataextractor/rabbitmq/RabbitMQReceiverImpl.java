@@ -11,7 +11,6 @@ import org.bigdatacenter.healthcarekihasadataextractor.resolver.script.ShellScri
 import org.bigdatacenter.healthcarekihasadataextractor.service.RawDataDBService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -24,9 +23,14 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
     private static final Logger logger = LoggerFactory.getLogger(RabbitMQReceiverImpl.class);
     private static final String currentThreadName = Thread.currentThread().getName();
 
-    private final ShellScriptResolver shellScriptResolver;
+    private static final int ALL_CONDITIONS_NOT_MET = 0x000000000;
+    private static final int DATABASE_NAME_IS_NULL = 0x000000FF;
+    private static final int QUERY_TASK_LIST_IS_NULL = 0x0000FF00;
+    private static final int REQUEST_INFO_NULL = 0x00FF0000;
+    private static final int QUERY_TASK_LIST_IS_EMPTY = 0xFF000000;
+    private static final int ALL_CONDITIONS_MET = 0xFFFFFFFF;
 
-    private final RabbitAdmin rabbitAdmin;
+    private final ShellScriptResolver shellScriptResolver;
 
     private final RawDataDBService rawDataDBService;
 
@@ -38,9 +42,8 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
     private String homePath;
 
     @Autowired
-    public RabbitMQReceiverImpl(ShellScriptResolver shellScriptResolver, RabbitAdmin rabbitAdmin, RawDataDBService rawDataDBService, DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller, StatisticAPICaller statisticAPICaller) {
+    public RabbitMQReceiverImpl(ShellScriptResolver shellScriptResolver, RawDataDBService rawDataDBService, DataIntegrationPlatformAPICaller dataIntegrationPlatformAPICaller, StatisticAPICaller statisticAPICaller) {
         this.shellScriptResolver = shellScriptResolver;
-        this.rabbitAdmin = rabbitAdmin;
         this.rawDataDBService = rawDataDBService;
         this.dataIntegrationPlatformAPICaller = dataIntegrationPlatformAPICaller;
         this.statisticAPICaller = statisticAPICaller;
@@ -49,11 +52,13 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
     @Override
     public void runReceiver(ExtractionRequest extractionRequest) {
         if (extractionRequest == null) {
-            logger.error(String.format("%s - Error occurs at RabbitMQReceiver: extraction request is null", currentThreadName));
+            logger.error(String.format("(dataSetUID=null / threadName=%s) - Error occurs at RabbitMQReceiver: extraction request is null", currentThreadName));
             return;
         }
 
-        if (checkExtractionRequestValidity(extractionRequest)) {
+        final int errorCode = checkExtractionRequestValidity(extractionRequest);
+
+        if (errorCode == ALL_CONDITIONS_NOT_MET) {
             final TrRequestInfo requestInfo = extractionRequest.getRequestInfo();
             final Integer dataSetUID = requestInfo.getDataSetUID();
 
@@ -69,58 +74,70 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
                 dataIntegrationPlatformAPICaller.callUpdateJobEndTime(dataSetUID, jobEndTime);
                 dataIntegrationPlatformAPICaller.callUpdateElapsedTime(dataSetUID, (jobEndTime - jobStartTime));
                 dataIntegrationPlatformAPICaller.callUpdateProcessState(dataSetUID, DataIntegrationPlatformAPICaller.PROCESS_STATE_CODE_COMPLETED);
-            } catch (Exception e1) {
+            } catch (Exception receiverException) {
                 try {
                     dataIntegrationPlatformAPICaller.callUpdateProcessState(dataSetUID, DataIntegrationPlatformAPICaller.PROCESS_STATE_CODE_REJECTED);
-                    logger.error(String.format("%s - Exception occurs in RabbitMQReceiver : %s", currentThreadName, e1.getMessage()));
-                    logger.error(String.format("%s - Bad Extraction Request : %s", currentThreadName, extractionRequest));
-
-//                    rabbitAdmin.purgeQueue(RabbitMQConfig.EXTRACTION_REQUEST_QUEUE, true);
-//                    logger.error(String.format("%s - The extraction request has been purged in queue. (%s)", currentThreadName, extractionRequest));
-                    e1.printStackTrace();
-                } catch (Exception e2) {
-                    e2.printStackTrace();
+                    logger.error(String.format("(dataSetUID=%d / threadName=%s) - Exception occurs in RabbitMQReceiver: %s", dataSetUID, currentThreadName, receiverException.getMessage()));
+                    logger.error(String.format("(dataSetUID=%d / threadName=%s) - Bad Extraction Request: %s", dataSetUID, currentThreadName, extractionRequest));
+                    receiverException.printStackTrace();
+                } catch (Exception platformApiException) {
+                    platformApiException.printStackTrace();
                 }
             }
         } else {
             try {
-                final TrRequestInfo requestInfo = extractionRequest.getRequestInfo();
-                if (requestInfo != null) {
-                    final Integer dataSetUID = requestInfo.getDataSetUID();
-                    if (dataSetUID != null)
-                        dataIntegrationPlatformAPICaller.callUpdateProcessState(dataSetUID, DataIntegrationPlatformAPICaller.PROCESS_STATE_CODE_REJECTED);
+                if ((errorCode & REQUEST_INFO_NULL) == REQUEST_INFO_NULL) {
+                    logger.error(String.format("(dataSetUID=null / threadName=%s) - Bad Extraction Request: %s", currentThreadName, extractionRequest));
+                } else {
+                    final Integer dataSetUID = extractionRequest.getRequestInfo().getDataSetUID();
+                    dataIntegrationPlatformAPICaller.callUpdateProcessState(dataSetUID, DataIntegrationPlatformAPICaller.PROCESS_STATE_CODE_REJECTED);
+                    logger.error(String.format("(dataSetUID=%d / threadName=%s) - Bad Extraction Request: %s", dataSetUID, currentThreadName, extractionRequest));
                 }
-                logger.error(String.format("%s - Bad Extraction Request : %s", currentThreadName, extractionRequest));
-
-//                rabbitAdmin.purgeQueue(RabbitMQConfig.EXTRACTION_REQUEST_QUEUE, true);
-//                logger.error(String.format("%s - The extraction request has been purged in queue. (%s)", currentThreadName, extractionRequest));
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception platformException) {
+                platformException.printStackTrace();
             }
         }
     }
 
-    private Boolean checkExtractionRequestValidity(ExtractionRequest extractionRequest) {
-        Boolean isValid = Boolean.TRUE;
+    private int checkExtractionRequestValidity(ExtractionRequest extractionRequest) {
+        int conditionCode = ALL_CONDITIONS_NOT_MET;
 
         final String databaseName = extractionRequest.getDatabaseName();
-        final List<QueryTask> queryTaskList = extractionRequest.getQueryTaskList();
         final TrRequestInfo requestInfo = extractionRequest.getRequestInfo();
+        final List<QueryTask> queryTaskList = extractionRequest.getQueryTaskList();
 
-        if (databaseName == null) {
-            logger.error(String.format("%s - Error occurs at RabbitMQReceiver: databaseName is null.", currentThreadName));
-            isValid = Boolean.FALSE;
-        } else if (requestInfo == null) {
-            logger.error(String.format("%s - Error occurs at RabbitMQReceiver: requestInfo is null.", currentThreadName));
-            isValid = Boolean.FALSE;
-        } else if (queryTaskList == null || queryTaskList.isEmpty()) {
-            logger.error(String.format("%s - Error occurs at RabbitMQReceiver: queryTaskList is either null or empty.", currentThreadName));
-            isValid = Boolean.FALSE;
-        } else if (extractionRequest.getQueryTaskList().size() == 0) {
-            logger.error(String.format("%s - Error occurs at RabbitMQReceiver: There are no tasks to process.", currentThreadName));
-            isValid = Boolean.FALSE;
+        final Boolean isDatabaseNameNull = databaseName == null;
+        final Boolean isRequestInfoNull = requestInfo == null;
+        final Boolean isQueryTaskListNull = queryTaskList == null;
+
+        if (isDatabaseNameNull) {
+            if (isRequestInfoNull)
+                logger.error(String.format("(dataSetUID=null / threadName=%s) - Error occurs at RabbitMQReceiver: databaseName is null.", currentThreadName));
+            else
+                logger.error(String.format("(dataSetUID=%d / threadName=%s) - Error occurs at RabbitMQReceiver: databaseName is null.", requestInfo.getDataSetUID(), currentThreadName));
+            conditionCode = conditionCode | DATABASE_NAME_IS_NULL;
         }
-        return isValid;
+
+        if (isRequestInfoNull) {
+            logger.error(String.format("(dataSetUID=null / threadName=%s) - Error occurs at RabbitMQReceiver: requestInfo is null.", currentThreadName));
+            conditionCode = conditionCode | REQUEST_INFO_NULL;
+        }
+
+        if (isQueryTaskListNull) {
+            if (isRequestInfoNull)
+                logger.error(String.format("(dataSetUID=null / threadName=%s) - Error occurs at RabbitMQReceiver: queryTaskList is null.", currentThreadName));
+            else
+                logger.error(String.format("(dataSetUID=%d / threadName=%s) - Error occurs at RabbitMQReceiver: queryTaskList is null.", requestInfo.getDataSetUID(), currentThreadName));
+            conditionCode = conditionCode | QUERY_TASK_LIST_IS_NULL;
+        } else if (queryTaskList.isEmpty()) {
+            if (isRequestInfoNull)
+                logger.error(String.format("(dataSetUID=null / threadName=%s) - Error occurs at RabbitMQReceiver: queryTaskList is empty.", currentThreadName));
+            else
+                logger.error(String.format("(dataSetUID=%d / threadName=%s) - Error occurs at RabbitMQReceiver: queryTaskList is empty.", requestInfo.getDataSetUID(), currentThreadName));
+            conditionCode = conditionCode | QUERY_TASK_LIST_IS_EMPTY;
+        }
+
+        return conditionCode;
     }
 
     private void runQueryTask(ExtractionRequest extractionRequest) {
@@ -128,6 +145,7 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
             final String databaseName = extractionRequest.getDatabaseName();
             final List<QueryTask> queryTaskList = extractionRequest.getQueryTaskList();
             final TrRequestInfo requestInfo = extractionRequest.getRequestInfo();
+            final Integer dataSetUID = requestInfo.getDataSetUID();
             final int queryTaskListSize = queryTaskList.size();
 
             for (int i = 0; i < queryTaskListSize; i++) {
@@ -136,16 +154,19 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
                 final DataExtractionTask dataExtractionTask = queryTask.getDataExtractionTask();
 
                 final Long queryBeginTime = System.currentTimeMillis();
-                logger.info(String.format("%s - Processing %d/%d query.", currentThreadName, (i + 1), queryTaskListSize));
+                logger.info(String.format("(dataSetUID=%d / threadName=%s) - Processing %d/%d query.", dataSetUID, currentThreadName, (i + 1), queryTaskListSize));
 
                 if (tableCreationTask != null) {
-                    logger.info(String.format("%s - Start table creation at Hive Query: %s", currentThreadName, tableCreationTask.getQuery()));
+                    logger.info(String.format("(dataSetUID=%d / threadName=%s) - Start table creation at Hive Query: %s", dataSetUID, currentThreadName, tableCreationTask.getQuery()));
                     rawDataDBService.createTable(tableCreationTask);
                 }
 
                 if (dataExtractionTask != null) {
-                    logger.info(String.format("%s - Start data extraction at Hive Query: %s", currentThreadName, dataExtractionTask.getQuery()));
+                    logger.info(String.format("(dataSetUID=%d / threadName=%s) - Start data extraction at Hive Query: %s", dataSetUID, currentThreadName, dataExtractionTask.getQuery()));
 
+                    final String dataFileName = dataExtractionTask.getDataFileName();
+                    final String hdfsLocation = dataExtractionTask.getHdfsLocation();
+                    final String header = dataExtractionTask.getHeader();
                     //
                     // TODO: Call REST API For Statistic
                     //
@@ -163,14 +184,11 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
                     //
                     // TODO: Merge Reducer output files in HDFS, download merged file to local file system.
                     //
-                    final String dataFileName = dataExtractionTask.getDataFileName();
-                    final String hdfsLocation = dataExtractionTask.getHdfsLocation();
-                    final String header = dataExtractionTask.getHeader();
-                    shellScriptResolver.runReducePartsMerger(hdfsLocation, header, homePath, dataFileName, databaseName);
+                    shellScriptResolver.runReducePartsMerger(dataSetUID, hdfsLocation, header, homePath, dataFileName, databaseName);
                 }
 
                 final Long queryEndTime = System.currentTimeMillis() - queryBeginTime;
-                logger.info(String.format("%s - Finish Hive Query: %s, Elapsed time: %d ms", currentThreadName, queryTask, queryEndTime));
+                logger.info(String.format("(dataSetUID=%d / threadName=%s) - Finish Hive Query: %s, Elapsed time: %d ms", dataSetUID, currentThreadName, queryTask, queryEndTime));
             }
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage());
@@ -181,6 +199,7 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
         try {
             final String databaseName = extractionRequest.getDatabaseName();
             final TrRequestInfo requestInfo = extractionRequest.getRequestInfo();
+            final Integer dataSetUID = requestInfo.getDataSetUID();
 
             //
             // TODO: Archive the extracted data set and finally send the file to FTP server.
@@ -189,9 +208,9 @@ public class RabbitMQReceiverImpl implements RabbitMQReceiver {
             final String ftpLocation = String.format("/%s/%s", requestInfo.getUserID(), databaseName);
 
             final long archiveFileBeginTime = System.currentTimeMillis();
-            logger.info(String.format("%s - Start archiving the extracted data set: %s", currentThreadName, archiveFileName));
-            shellScriptResolver.runArchiveExtractedDataSet(archiveFileName, ftpLocation, homePath, databaseName);
-            logger.info(String.format("%s - Finish archiving the extracted data set: %s, Elapsed time: %d ms", currentThreadName, archiveFileName, (System.currentTimeMillis() - archiveFileBeginTime)));
+            logger.info(String.format("(dataSetUID=%d / threadName=%s) - Start archiving the extracted data set: %s", dataSetUID, currentThreadName, archiveFileName));
+            shellScriptResolver.runArchiveExtractedDataSet(dataSetUID, archiveFileName, ftpLocation, homePath, databaseName);
+            logger.info(String.format("(dataSetUID=%d / threadName=%s) - Finish archiving the extracted data set: %s, Elapsed time: %d ms", dataSetUID, currentThreadName, archiveFileName, (System.currentTimeMillis() - archiveFileBeginTime)));
 
             final String ftpURI = String.format("%s/%s", ftpLocation, archiveFileName);
             dataIntegrationPlatformAPICaller.callCreateFtpInfo(requestInfo.getDataSetUID(), requestInfo.getUserID(), ftpURI);

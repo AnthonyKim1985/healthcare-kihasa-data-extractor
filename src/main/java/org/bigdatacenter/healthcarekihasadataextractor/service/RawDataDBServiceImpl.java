@@ -17,11 +17,11 @@ public class RawDataDBServiceImpl implements RawDataDBService {
 
     @Override
     public void extractData(DataExtractionTask dataExtractionTask) {
-        rawDataDBMapper.extractData(dataExtractionTask);
+        this.rawDataDBMapper.extractData(dataExtractionTask);
     }
 
     @Override
     public void createTable(TableCreationTask tableCreationTask) {
-        rawDataDBMapper.createTable(tableCreationTask);
+        this.rawDataDBMapper.createTable(tableCreationTask);
     }
 }
