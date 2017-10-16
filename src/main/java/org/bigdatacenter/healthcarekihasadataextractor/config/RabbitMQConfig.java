@@ -52,7 +52,8 @@ public class RabbitMQConfig {
         container.setConnectionFactory(connectionFactory);
         container.setQueueNames(EXTRACTION_REQUEST_QUEUE);
         container.setMessageListener(listenerAdapter);
-        container.setMaxConcurrentConsumers(1);
+        container.setConcurrentConsumers(1);
+        container.setMaxConcurrentConsumers(2);
         container.setReceiveTimeout(3000L);
         container.setRecoveryInterval(3000L);
 
