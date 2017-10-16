@@ -28,7 +28,7 @@ public class JoinClauseBuilderImpl implements JoinClauseBuilder {
 
         try {
             if (joinParameterList.size() == 1) {
-                joinQueryBuilder.append(selectClauseBuilder.buildClause(entryJoinParameter.getDatabaseName(), entryJoinParameter.getTableName(), entryJoinParameter.getProjection(), Boolean.FALSE));
+                joinQueryBuilder.append(selectClauseBuilder.buildClause(entryJoinParameter.getDatabaseName(), entryJoinParameter.getTableName(), entryJoinParameter.getProjection(), Boolean.TRUE));
             } else {
                 joinQueryBuilder.append(String.format("SELECT DISTINCT %c.%s FROM %s.%s %c",
                         entryTableAlias, entryJoinParameter.getProjection(), entryJoinParameter.getDatabaseName(), entryJoinParameter.getTableName(), entryTableAlias));
