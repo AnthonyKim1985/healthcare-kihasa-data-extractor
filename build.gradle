@@ -42,6 +42,10 @@ dependencies {
 		exclude group: 'org.slf4j', module: 'slf4j-log4j12'
 		exclude group: 'javax.servlet', module: 'servlet-api'
 	}
+	compile('org.apache.spark:spark-core_2.10:2.0.2') {
+		exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+		exclude group: 'javax.servlet', module: 'servlet-api'
+	}
 	compileOnly('org.projectlombok:lombok')
 	testCompile('org.springframework.boot:spring-boot-starter-tomcat')
 	testCompile('com.fasterxml.jackson.core:jackson-databind')
